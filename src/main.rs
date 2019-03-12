@@ -2,6 +2,7 @@ mod secrets;
 
 use failure::Error;
 use rumqtt::{ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, SecurityOptions};
+use std::thread;
 
 const CA_CHAIN: &[u8] = include_bytes!("/etc/ssl/cert.pem");
 
@@ -55,12 +56,15 @@ fn main() -> Result<(), Error> {
             let tristate = zap_tristate(&p.topic_name, payload);
             dbg!(&tristate);
             if let Some(t) = tristate {
-                adafruit_mqtt_client.publish(
-                    secrets::ADAFRUIT_TOPIC,
-                    QoS::AtLeastOnce,
-                    false,
-                    t
-                )?;
+                let mut client = adafruit_mqtt_client.clone();
+                thread::spawn(move || {
+                    client.publish(
+                        secrets::ADAFRUIT_TOPIC,
+                        QoS::AtLeastOnce,
+                        false,
+                        t
+                    ).unwrap();
+                });
             }
         }
     }
