@@ -51,22 +51,22 @@ fn main() -> Result<(), Error> {
     gbridge_mqtt_client.subscribe(format!("{}#", secrets::GBRIDGE_TOPIC_PREFIX), QoS::AtLeastOnce)?;
 
     for notification in gbridge_notifications {
-        if let Notification::Publish(p) = notification {
-            let payload = std::str::from_utf8((*p.payload).as_slice())?;
-            let tristate = zap_tristate(&p.topic_name, payload);
-            dbg!(&tristate);
-            if let Some(t) = tristate {
-                let mut client = adafruit_mqtt_client.clone();
-                thread::spawn(move || {
-                    client.publish(
-                        secrets::ADAFRUIT_TOPIC,
-                        QoS::AtLeastOnce,
-                        false,
-                        t
-                    ).unwrap();
-                });
+        let mut client = adafruit_mqtt_client.clone();
+        thread::spawn(move || {
+            if let Notification::Publish(p) = notification {
+                let payload = std::str::from_utf8((*p.payload).as_slice()).unwrap();
+                let tristate = zap_tristate(&p.topic_name, payload);
+                dbg!(&tristate);
+                if let Some(t) = tristate {
+                        client.publish(
+                            secrets::ADAFRUIT_TOPIC,
+                            QoS::AtLeastOnce,
+                            false,
+                            t
+                        ).unwrap();
+                }
             }
-        }
+        });
     }
 
     Ok(())
