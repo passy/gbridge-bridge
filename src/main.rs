@@ -38,7 +38,7 @@ fn main() -> Result<(), Error> {
             secrets::ADAFRUIT_USER.to_string(),
             secrets::ADAFRUIT_KEY.to_string(),
         ));
-    let (mut adafruit_mqtt_client, _adafruit_notifications) = MqttClient::start(adafruit_options)?;
+    let (adafruit_mqtt_client, _adafruit_notifications) = MqttClient::start(adafruit_options)?;
 
     let gbridge_options = MqttOptions::new("zap", "mqtt.gbridge.io", 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
