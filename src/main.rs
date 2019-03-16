@@ -1,8 +1,25 @@
-mod secrets;
-
 use failure::Error;
 use rumqtt::{ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, SecurityOptions};
+use serde::Deserialize;
+use std::env;
+use std::fs;
 use std::thread;
+use toml;
+
+#[derive(Debug, Deserialize)]
+struct MQTTConnectionConfig {
+    host: String,
+    user: String,
+    password: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct Config {
+    source: MQTTConnectionConfig,
+    target: MQTTConnectionConfig,
+    source_topic_prefix: String,
+    target_topic: String,
+}
 
 const CA_CHAIN: &[u8] = include_bytes!("/etc/ssl/cert.pem");
 
@@ -32,38 +49,41 @@ fn zap_tristate(topic: &str, payload: &str) -> Option<String> {
 }
 
 fn main() -> Result<(), Error> {
-    let adafruit_options = MqttOptions::new("zap", "io.adafruit.com", 8883)
+    let config = toml::from_str(&fs::read_to_string(&env::args().collect::<Vec<_>>()[1])?)?;
+    run(config)
+}
+
+fn run(config: Config) -> Result<(), Error> {
+    let adafruit_options = MqttOptions::new("zap", config.target.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
-            secrets::ADAFRUIT_USER.to_string(),
-            secrets::ADAFRUIT_KEY.to_string(),
+            config.target.user,
+            config.target.password,
         ));
     let (adafruit_mqtt_client, _adafruit_notifications) = MqttClient::start(adafruit_options)?;
 
-    let gbridge_options = MqttOptions::new("zap", "mqtt.gbridge.io", 8883)
+    let gbridge_options = MqttOptions::new("zap", config.source.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
-            secrets::GBRIDGE_USER.to_string(),
-            secrets::GBRIDGE_KEY.to_string(),
+            config.source.user,
+            config.source.password,
         ));
     let (mut gbridge_mqtt_client, gbridge_notifications) = MqttClient::start(gbridge_options)?;
 
-    gbridge_mqtt_client.subscribe(format!("{}#", secrets::GBRIDGE_TOPIC_PREFIX), QoS::AtLeastOnce)?;
+    gbridge_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
 
     for notification in gbridge_notifications {
         let mut client = adafruit_mqtt_client.clone();
+        let target_topic = config.target_topic.to_string();
         thread::spawn(move || {
             if let Notification::Publish(p) = notification {
                 let payload = std::str::from_utf8((*p.payload).as_slice()).unwrap();
                 let tristate = zap_tristate(&p.topic_name, payload);
                 dbg!(&tristate);
                 if let Some(t) = tristate {
-                        client.publish(
-                            secrets::ADAFRUIT_TOPIC,
-                            QoS::AtLeastOnce,
-                            false,
-                            t
-                        ).unwrap();
+                    client
+                        .publish(target_topic, QoS::AtLeastOnce, false, t)
+                        .unwrap();
                 }
             }
         });
