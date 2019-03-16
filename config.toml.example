@@ -1,0 +1,12 @@
+source_topic_prefix = "gBridge/u915/"
+target_topic = "passy/feeds/zap"
+
+[target]
+host = "io.adafruit.com"
+user = "passy"
+password = "20f26af76f584742bdf046cbe3c2cab0"
+
+[source]
+host = "mqtt.gbridge.io"
+user = "gbridge-u915"
+password = "v3J9A1pqZCj6Z1aP"
