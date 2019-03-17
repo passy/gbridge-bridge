@@ -1,0 +1,12 @@
+source_topic_prefix = "gBridge/<user>/"
+target_topic = "<user>/feeds/zap"
+
+[target]
+host = "io.adafruit.com"
+user = ""
+password = ""
+
+[source]
+host = "mqtt.gbridge.io"
+user = "gbridge-<user>"
+password = ""
