@@ -3,7 +3,7 @@ use rumqtt::{ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, Secur
 use serde::Deserialize;
 use std::env;
 use std::fs;
-use std::thread;
+use std::collections::HashMap;
 use toml;
 
 #[derive(Debug, Deserialize)]
@@ -19,20 +19,14 @@ struct Config {
     target: MQTTConnectionConfig,
     source_topic_prefix: String,
     target_topic: String,
+    switches: HashMap<String, String>,
 }
 
 const CA_CHAIN: &[u8] = include_bytes!("/etc/ssl/cert.pem");
 
-fn zap_tristate(topic: &str, payload: &str) -> Option<String> {
+fn zap_tristate(topic: &str, payload: &str, switch_map: &HashMap<String, String>) -> Option<String> {
     let raw_tristate = if let Some(switch) = topic.split('/').collect::<Vec<_>>().get(2) {
-        dbg!(switch);
-        match *switch {
-            "d2756" => Some("FFF0FFFF01"),
-            "d2953" => Some("FFF0FFFF10"),
-            "d2954" => Some("FFF0FFF100"),
-            "d2955" => Some("FFF0FF1F00"),
-            _ => None,
-        }
+        switch_map.get(*switch)
     } else {
         None
     };
@@ -72,21 +66,18 @@ fn run(config: Config) -> Result<(), Error> {
 
     gbridge_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
 
+    let switch_map = config.switches;
     for notification in gbridge_notifications {
         let mut client = adafruit_mqtt_client.clone();
         let target_topic = config.target_topic.to_string();
-        thread::spawn(move || {
-            if let Notification::Publish(p) = notification {
-                let payload = std::str::from_utf8((*p.payload).as_slice()).unwrap();
-                let tristate = zap_tristate(&p.topic_name, payload);
-                dbg!(&tristate);
-                if let Some(t) = tristate {
-                    client
-                        .publish(target_topic, QoS::AtLeastOnce, false, t)
-                        .unwrap();
-                }
+        if let Notification::Publish(p) = notification {
+            let payload = std::str::from_utf8((*p.payload).as_slice())?;
+            let tristate = zap_tristate(&p.topic_name, payload, &switch_map);
+            eprintln!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
+            if let Some(t) = tristate {
+                client.publish(target_topic, QoS::AtLeastOnce, false, t)?
             }
-        });
+        }
     }
 
     Ok(())

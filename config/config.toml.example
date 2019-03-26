@@ -10,3 +10,7 @@ password = ""
 host = "mqtt.gbridge.io"
 user = "gbridge-<user>"
 password = ""
+
+[switches]
+d2777 = "FFFFFFFF00"
+d2778 = "FFFFFFFF10"
