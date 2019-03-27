@@ -1,9 +1,9 @@
 use failure::Error;
 use rumqtt::{ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, SecurityOptions};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::collections::HashMap;
 use toml;
 
 #[derive(Debug, Deserialize)]
@@ -24,7 +24,11 @@ struct Config {
 
 const CA_CHAIN: &[u8] = include_bytes!("/etc/ssl/cert.pem");
 
-fn zap_tristate(topic: &str, payload: &str, switch_map: &HashMap<String, String>) -> Option<String> {
+fn zap_tristate(
+    topic: &str,
+    payload: &str,
+    switch_map: &HashMap<String, String>,
+) -> Option<String> {
     let raw_tristate = if let Some(switch) = topic.split('/').collect::<Vec<_>>().get(2) {
         switch_map.get(*switch)
     } else {
