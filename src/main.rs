@@ -52,27 +52,27 @@ fn main() -> Result<(), Error> {
 }
 
 fn run(config: Config) -> Result<(), Error> {
-    let adafruit_options = MqttOptions::new("zap", config.target.host, 8883)
+    let target_options = MqttOptions::new("zap", config.target.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.target.user,
             config.target.password,
         ));
-    let (adafruit_mqtt_client, _adafruit_notifications) = MqttClient::start(adafruit_options)?;
+    let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
 
-    let gbridge_options = MqttOptions::new("zap", config.source.host, 8883)
+    let source_options = MqttOptions::new("zap", config.source.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.source.user,
             config.source.password,
         ));
-    let (mut gbridge_mqtt_client, gbridge_notifications) = MqttClient::start(gbridge_options)?;
+    let (mut source_mqtt_client, source_notifications) = MqttClient::start(source_options)?;
 
-    gbridge_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
+    source_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
 
     let switch_map = config.switches;
-    for notification in gbridge_notifications {
-        let mut client = adafruit_mqtt_client.clone();
+    for notification in source_notifications {
+        let mut client = target_mqtt_client.clone();
         let target_topic = config.target_topic.to_string();
         if let Notification::Publish(p) = notification {
             let payload = std::str::from_utf8((*p.payload).as_slice())?;
