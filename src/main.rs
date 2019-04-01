@@ -13,7 +13,7 @@ struct MQTTConnectionConfig {
     password: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq, Eq)]
 struct SwitchConfig {
     name: String,
     on: String,
@@ -98,4 +98,36 @@ fn run(config: Config) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_prepare_zap_configs() {
+        let config_str = include_str!("../config/config.toml.example");
+        let config: Config = toml::from_str(&config_str).expect("Invalid sample config");
+
+        let actual = prepare_switch_configs(config.switches);
+        let mut expected = HashMap::with_capacity(2);
+        expected.insert(
+            "d2777".to_string(),
+            SwitchConfig {
+                name: "d2777".to_string(),
+                on: "FFFFFFFF0001".to_string(),
+                off: "FFFFFFFF0010".to_string(),
+            },
+        );
+        expected.insert(
+            "d2778".to_string(),
+            SwitchConfig {
+                name: "d2778".to_string(),
+                on: "FFFFFF0F0001".to_string(),
+                off: "FFFFF0FF0010".to_string(),
+            },
+        );
+
+        assert_eq!(actual, expected);
+    }
 }
