@@ -11,6 +11,12 @@ host = "mqtt.gbridge.io"
 user = "gbridge-<user>"
 password = ""
 
-[switches]
-d2777 = "FFFFFFFF00"
-d2778 = "FFFFFFFF10"
+[[switches]]
+name = "d2777"
+on   = "FFFFFFFF0001"
+off  = "FFFFFFFF0010"
+
+[[switches]]
+name = "d2778"
+on   = "FFFFFF0F0001"
+off  = "FFFFF0FF0010"
