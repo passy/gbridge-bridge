@@ -10,4 +10,4 @@ failure = "0.1.5"
 phf = "0.7.24"
 phf_macros = "0.7.24"
 toml = "0.5.0"
-serde = { version = "1.0.89", features = ["derive"] }
+serde = { version = "1.0.91", features = ["derive"] }
