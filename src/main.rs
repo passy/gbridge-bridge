@@ -36,21 +36,20 @@ fn zap_tristate(
     payload: &str,
     switch_configs: &HashMap<String, SwitchConfig>,
 ) -> Option<String> {
-    let config = if let Some(switch) = topic.split('/').collect::<Vec<_>>().get(2) {
-        switch_configs.get(*switch)
-    } else {
-        None
-    };
-
-    config.and_then(|c| {
-        if payload == "0" {
-            Some(c.off.to_string())
-        } else if payload == "1" {
-            Some(c.on.to_string())
-        } else {
-            None
-        }
-    })
+    topic
+        .split('/')
+        .collect::<Vec<_>>()
+        .get(2)
+        .and_then(|switch| switch_configs.get(*switch))
+        .and_then(|c| {
+            if payload == "0" {
+                Some(c.off.to_string())
+            } else if payload == "1" {
+                Some(c.on.to_string())
+            } else {
+                None
+            }
+        })
 }
 
 /// Using `name` as key, make switch configs faster and more convenient to lookup.
