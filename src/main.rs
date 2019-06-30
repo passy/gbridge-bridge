@@ -1,5 +1,7 @@
 use failure::Error;
-use rumqtt::{ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, SecurityOptions};
+use rumqtt::{
+    ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
@@ -69,7 +71,8 @@ fn run(config: Config) -> Result<(), Error> {
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.target.user,
             config.target.password,
-        ));
+        ))
+        .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
     let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
 
     let source_options = MqttOptions::new("zap", config.source.host, 8883)
@@ -77,7 +80,8 @@ fn run(config: Config) -> Result<(), Error> {
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.source.user,
             config.source.password,
-        ));
+        ))
+        .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
     let (mut source_mqtt_client, source_notifications) = MqttClient::start(source_options)?;
 
     source_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
@@ -95,6 +99,7 @@ fn run(config: Config) -> Result<(), Error> {
             }
         }
     }
+    eprintln!("MQTT connection closed.");
 
     Ok(())
 }
