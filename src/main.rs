@@ -7,6 +7,8 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use toml;
+use log;
+use pretty_env_logger;
 
 #[derive(Debug, Deserialize)]
 struct MQTTConnectionConfig {
@@ -61,27 +63,30 @@ fn prepare_switch_configs(configs: Vec<SwitchConfig>) -> HashMap<String, SwitchC
 }
 
 fn main() -> Result<(), Error> {
+    pretty_env_logger::try_init()?;
     let config = toml::from_str(&fs::read_to_string(&env::args().collect::<Vec<_>>()[1])?)?;
     run(config)
 }
 
 fn run(config: Config) -> Result<(), Error> {
-    let target_options = MqttOptions::new("zap", config.target.host, 8883)
+    let target_options = MqttOptions::new("target", &config.target.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.target.user,
             config.target.password,
         ))
         .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
+    log::info!("Connecting to target {}:{}", &config.target.host, 8883);
     let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
 
-    let source_options = MqttOptions::new("zap", config.source.host, 8883)
+    let source_options = MqttOptions::new("source", &config.source.host, 8883)
         .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.source.user,
             config.source.password,
         ))
         .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
+    log::info!("Connecting to source {}:{}", &config.source.host, 8883);
     let (mut source_mqtt_client, source_notifications) = MqttClient::start(source_options)?;
 
     source_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
