@@ -1,6 +1,6 @@
 use failure::Error;
 use rumqtt::{
-    ConnectionMethod, MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions,
+    MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions,
 };
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -70,7 +70,7 @@ fn main() -> Result<(), Error> {
 
 fn run(config: Config) -> Result<(), Error> {
     let target_options = MqttOptions::new("target", &config.target.host, 8883)
-        .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
+        .set_ca(CA_CHAIN.to_vec())
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.target.user,
             config.target.password,
@@ -80,7 +80,7 @@ fn run(config: Config) -> Result<(), Error> {
     let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
 
     let source_options = MqttOptions::new("source", &config.source.host, 8883)
-        .set_connection_method(ConnectionMethod::Tls(CA_CHAIN.to_vec(), None))
+        .set_ca(CA_CHAIN.to_vec())
         .set_security_opts(SecurityOptions::UsernamePassword(
             config.source.user,
             config.source.password,
