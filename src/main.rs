@@ -1,14 +1,9 @@
 use failure::Error;
-use rumqtt::{
-    MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions,
-};
+use rumqtt::{MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use toml;
-use log;
-use pretty_env_logger;
 
 #[derive(Debug, Deserialize)]
 struct MQTTConnectionConfig {
@@ -64,8 +59,13 @@ fn prepare_switch_configs(configs: Vec<SwitchConfig>) -> HashMap<String, SwitchC
 
 fn main() -> Result<(), Error> {
     pretty_env_logger::try_init()?;
-    let config = toml::from_str(&fs::read_to_string(&env::args().collect::<Vec<_>>()[1])?)?;
-    run(config)
+    if let Some(path) = env::args().collect::<Vec<_>>().get(1) {
+        let config = toml::from_str(&fs::read_to_string(&path)?)?;
+        run(config)
+    } else {
+        eprintln!("ERR: Missing configuration argument.");
+        Ok(())
+    }
 }
 
 fn run(config: Config) -> Result<(), Error> {
