@@ -75,7 +75,8 @@ fn run(config: Config) -> Result<(), Error> {
             config.target.user,
             config.target.password,
         ))
-        .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
+        // Reconnection appears to be broken in rumqtt. Subsequent notifications aren't handled.
+        .set_reconnect_opts(ReconnectOptions::Never);
     log::info!("Connecting to target {}:{}", &config.target.host, 8883);
     let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
 
@@ -85,7 +86,7 @@ fn run(config: Config) -> Result<(), Error> {
             config.source.user,
             config.source.password,
         ))
-        .set_reconnect_opts(ReconnectOptions::AfterFirstSuccess(1));
+        .set_reconnect_opts(ReconnectOptions::Never);
     log::info!("Connecting to source {}:{}", &config.source.host, 8883);
     let (mut source_mqtt_client, source_notifications) = MqttClient::start(source_options)?;
 
