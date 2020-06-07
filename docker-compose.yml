@@ -1,0 +1,9 @@
+version: "3"
+
+services:
+  gbridge-bridge:
+    image: passy/gbridge-bridge:v${VERSION}
+    restart: unless-stopped
+    volumes:
+      - ./config:/srv/config
+
