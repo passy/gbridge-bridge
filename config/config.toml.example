@@ -1,5 +1,6 @@
 source_topic_prefix = "gBridge/<user>/"
 target_topic = "<user>/feeds/zap"
+graphite_host = "localhost:2003"
 
 [target]
 host = "io.adafruit.com"

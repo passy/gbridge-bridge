@@ -1,9 +1,15 @@
+use dipstick::{lazy_static, metrics, InputScope, Proxy};
 use failure::Error;
 use rumqtt::{MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+
+metrics! { METRICS = "gbridge-bridge" => {
+        pub PUBLISH_MARKER: dipstick::Marker = "publish_count";
+    }
+}
 
 #[derive(Debug, Deserialize)]
 struct MQTTConnectionConfig {
@@ -23,6 +29,7 @@ struct SwitchConfig {
 struct Config {
     source: MQTTConnectionConfig,
     target: MQTTConnectionConfig,
+    graphite_host: String,
     source_topic_prefix: String,
     target_topic: String,
     switches: Vec<SwitchConfig>,
@@ -61,11 +68,18 @@ fn main() -> Result<(), Error> {
     pretty_env_logger::try_init()?;
     if let Some(path) = env::args().collect::<Vec<_>>().get(1) {
         let config = toml::from_str(&fs::read_to_string(&path)?)?;
+        init_metrics(&config)?;
         run(config)
     } else {
         eprintln!("ERR: Missing configuration argument.");
         Ok(())
     }
+}
+
+fn init_metrics(config: &Config) -> Result<(), Error> {
+    use dipstick::Input;
+    METRICS.target(dipstick::Graphite::send_to(&config.graphite_host)?.metrics());
+    Ok(())
 }
 
 fn run(config: Config) -> Result<(), Error> {
@@ -97,6 +111,7 @@ fn run(config: Config) -> Result<(), Error> {
         let mut client = target_mqtt_client.clone();
         let target_topic = config.target_topic.to_string();
         if let Notification::Publish(p) = notification {
+            PUBLISH_MARKER.mark();
             let payload = std::str::from_utf8((*p.payload).as_slice())?;
             let tristate = zap_tristate(&p.topic_name, payload, &switch_configs);
             eprintln!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
