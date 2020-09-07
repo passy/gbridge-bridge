@@ -6,11 +6,6 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 
-metrics! { METRICS = "gbridge-bridge" => {
-        pub PUBLISH_MARKER: dipstick::Marker = "publish_count";
-    }
-}
-
 #[derive(Debug, Deserialize)]
 struct MQTTConnectionConfig {
     host: String,
@@ -68,54 +63,68 @@ fn main() -> Result<(), Error> {
     pretty_env_logger::try_init()?;
     if let Some(path) = env::args().collect::<Vec<_>>().get(1) {
         let config = toml::from_str(&fs::read_to_string(&path)?)?;
-        init_metrics(&config)?;
-        run(config)
+        let metrics = init_metrics(&config)?;
+        run(config, metrics)
     } else {
         eprintln!("ERR: Missing configuration argument.");
         Ok(())
     }
 }
 
-fn init_metrics(config: &Config) -> Result<(), Error> {
-    use dipstick::Input;
-    METRICS.target(dipstick::Graphite::send_to(&config.graphite_host)?.metrics());
-    Ok(())
+fn init_metrics(config: &Config) -> Result<Box<dyn dipstick::InputScope>, Error> {
+    use dipstick::{Input, Prefixed};
+    Ok(Box::new(
+        dipstick::Graphite::send_to(&config.graphite_host)?
+            .metrics()
+            .named("gbridge_bridge"),
+    ))
 }
 
-fn run(config: Config) -> Result<(), Error> {
-    let target_options = MqttOptions::new("target", &config.target.host, 8883)
-        .set_ca(CA_CHAIN.to_vec())
-        .set_security_opts(SecurityOptions::UsernamePassword(
-            config.target.user,
-            config.target.password,
-        ))
-        // Reconnection appears to be broken in rumqtt. Subsequent notifications aren't handled.
-        .set_reconnect_opts(ReconnectOptions::Never);
-    log::info!("Connecting to target {}:{}", &config.target.host, 8883);
-    let (target_mqtt_client, _target_notifications) = MqttClient::start(target_options)?;
+fn run(config: Config, metrics: Box<dyn dipstick::InputScope>) -> Result<(), Error> {
+    use dipstick::{time, *};
 
-    let source_options = MqttOptions::new("source", &config.source.host, 8883)
-        .set_ca(CA_CHAIN.to_vec())
-        .set_security_opts(SecurityOptions::UsernamePassword(
-            config.source.user,
-            config.source.password,
-        ))
-        .set_reconnect_opts(ReconnectOptions::Never);
-    log::info!("Connecting to source {}:{}", &config.source.host, 8883);
-    let (mut source_mqtt_client, source_notifications) = MqttClient::start(source_options)?;
+    let metrics = dipstick::Stream::write_to_stdout().metrics();
+
+    let target_connection_timer = metrics.timer("target_connect");
+    let (target_mqtt_client, _target_notifications) = time!(target_connection_timer, {
+        let target_options = MqttOptions::new("target", &config.target.host, 8883)
+            .set_ca(CA_CHAIN.to_vec())
+            .set_security_opts(SecurityOptions::UsernamePassword(
+                config.target.user,
+                config.target.password,
+            ))
+            // Reconnection appears to be broken in rumqtt. Subsequent notifications aren't handled.
+            .set_reconnect_opts(ReconnectOptions::Never);
+        log::info!("Connecting to target {}:{}", &config.target.host, 8883);
+        MqttClient::start(target_options)?
+    });
+
+    let source_connection_timer = metrics.timer("source_connect");
+    let (mut source_mqtt_client, source_notifications) = time!(source_connection_timer, {
+        let source_options = MqttOptions::new("source", &config.source.host, 8883)
+            .set_ca(CA_CHAIN.to_vec())
+            .set_security_opts(SecurityOptions::UsernamePassword(
+                config.source.user,
+                config.source.password,
+            ))
+            .set_reconnect_opts(ReconnectOptions::Never);
+        log::info!("Connecting to source {}:{}", &config.source.host, 8883);
+        MqttClient::start(source_options)?
+    });
 
     source_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
 
     let switch_configs = prepare_switch_configs(config.switches);
+    let publish_marker = metrics.marker("publish_count");
     for notification in source_notifications {
         let mut client = target_mqtt_client.clone();
         let target_topic = config.target_topic.to_string();
         if let Notification::Publish(p) = notification {
-            PUBLISH_MARKER.mark();
             let payload = std::str::from_utf8((*p.payload).as_slice())?;
             let tristate = zap_tristate(&p.topic_name, payload, &switch_configs);
             eprintln!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
             if let Some(t) = tristate {
+                publish_marker.mark();
                 client.publish(target_topic, QoS::AtLeastOnce, false, t)?
             }
         }
