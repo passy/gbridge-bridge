@@ -1,4 +1,3 @@
-use dipstick::{lazy_static, metrics, InputScope, Proxy};
 use failure::Error;
 use rumqtt::{MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions};
 use serde::Deserialize;
@@ -24,7 +23,7 @@ struct SwitchConfig {
 struct Config {
     source: MQTTConnectionConfig,
     target: MQTTConnectionConfig,
-    graphite_host: String,
+    statsd_host: String,
     source_topic_prefix: String,
     target_topic: String,
     switches: Vec<SwitchConfig>,
@@ -71,51 +70,39 @@ fn main() -> Result<(), Error> {
     }
 }
 
-fn init_metrics(config: &Config) -> Result<Box<dyn dipstick::InputScope>, Error> {
-    use dipstick::{Input, Prefixed};
-    Ok(Box::new(
-        dipstick::Graphite::send_to(&config.graphite_host)?
-            .metrics()
-            .named("gbridge_bridge"),
-    ))
+fn init_metrics(config: &Config) -> Result<statsd::Client, Error> {
+    statsd::Client::new(&config.statsd_host, "gbridge_bridge").map_err(|e| e.into())
 }
 
-fn run(config: Config, metrics: Box<dyn dipstick::InputScope>) -> Result<(), Error> {
-    use dipstick::{time, *};
-
-    let metrics = dipstick::Stream::write_to_stdout().metrics();
-
-    let target_connection_timer = metrics.timer("target_connect");
-    let (target_mqtt_client, _target_notifications) = time!(target_connection_timer, {
+fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
+    let (target_mqtt_client, _target_notifications) = metrics.time("target_connect", || {
         let target_options = MqttOptions::new("target", &config.target.host, 8883)
             .set_ca(CA_CHAIN.to_vec())
             .set_security_opts(SecurityOptions::UsernamePassword(
-                config.target.user,
-                config.target.password,
+                config.target.user.clone(),
+                config.target.password.clone(),
             ))
             // Reconnection appears to be broken in rumqtt. Subsequent notifications aren't handled.
             .set_reconnect_opts(ReconnectOptions::Never);
         log::info!("Connecting to target {}:{}", &config.target.host, 8883);
-        MqttClient::start(target_options)?
-    });
+        MqttClient::start(target_options)
+    })?;
 
-    let source_connection_timer = metrics.timer("source_connect");
-    let (mut source_mqtt_client, source_notifications) = time!(source_connection_timer, {
+    let (mut source_mqtt_client, source_notifications) = metrics.time("source_connect", || {
         let source_options = MqttOptions::new("source", &config.source.host, 8883)
             .set_ca(CA_CHAIN.to_vec())
             .set_security_opts(SecurityOptions::UsernamePassword(
-                config.source.user,
-                config.source.password,
+                config.source.user.clone(),
+                config.source.password.clone(),
             ))
             .set_reconnect_opts(ReconnectOptions::Never);
         log::info!("Connecting to source {}:{}", &config.source.host, 8883);
-        MqttClient::start(source_options)?
-    });
+        MqttClient::start(source_options)
+    })?;
 
     source_mqtt_client.subscribe(format!("{}#", config.source_topic_prefix), QoS::AtLeastOnce)?;
 
     let switch_configs = prepare_switch_configs(config.switches);
-    let publish_marker = metrics.marker("publish_count");
     for notification in source_notifications {
         let mut client = target_mqtt_client.clone();
         let target_topic = config.target_topic.to_string();
@@ -124,7 +111,8 @@ fn run(config: Config, metrics: Box<dyn dipstick::InputScope>) -> Result<(), Err
             let tristate = zap_tristate(&p.topic_name, payload, &switch_configs);
             eprintln!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
             if let Some(t) = tristate {
-                publish_marker.mark();
+                eprintln!("Marking ...");
+                metrics.incr("publish");
                 client.publish(target_topic, QoS::AtLeastOnce, false, t)?
             }
         }
