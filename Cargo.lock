@@ -272,7 +272,7 @@ checksum = "1b980f2816d6ee8673b6517b52cb0e808a180efc92e5c19d02cdda79066703ef"
 
 [[package]]
 name = "gbridge-bridge"
-version = "0.5.4"
+version = "0.6.1"
 dependencies = [
  "failure",
  "log",
