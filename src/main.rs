@@ -24,6 +24,7 @@ struct Config {
     source: MQTTConnectionConfig,
     target: MQTTConnectionConfig,
     statsd_host: String,
+    sentry_host: String,
     source_topic_prefix: String,
     target_topic: String,
     switches: Vec<SwitchConfig>,
@@ -61,7 +62,8 @@ fn prepare_switch_configs(configs: Vec<SwitchConfig>) -> HashMap<String, SwitchC
 fn main() -> Result<(), Error> {
     pretty_env_logger::try_init()?;
     if let Some(path) = env::args().collect::<Vec<_>>().get(1) {
-        let config = toml::from_str(&fs::read_to_string(&path)?)?;
+        let config: Config = toml::from_str(&fs::read_to_string(&path)?)?;
+        let _guard = sentry::init(config.sentry_host.clone());
         let metrics = init_metrics(&config)?;
         run(config, metrics)
     } else {

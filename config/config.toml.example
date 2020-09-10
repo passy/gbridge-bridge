@@ -1,6 +1,7 @@
 source_topic_prefix = "gBridge/<user>/"
 target_topic = "<user>/feeds/zap"
 graphite_host = "localhost:2003"
+sentry_host = "https://deadbeef@o12345.ingest.sentry.io/987654321"
 
 [target]
 host = "io.adafruit.com"
