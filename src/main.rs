@@ -1,5 +1,5 @@
 use failure::Error;
-use rumqtt::{MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions};
+use rumqttc::{MqttClient, MqttOptions, Notification, QoS, ReconnectOptions, SecurityOptions};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
