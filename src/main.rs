@@ -60,16 +60,29 @@ fn prepare_switch_configs(configs: Vec<SwitchConfig>) -> HashMap<String, SwitchC
 }
 
 fn main() -> Result<(), Error> {
-    pretty_env_logger::try_init()?;
     if let Some(path) = env::args().collect::<Vec<_>>().get(1) {
         let config: Config = toml::from_str(&fs::read_to_string(&path)?)?;
-        let _guard = sentry::init(config.sentry_host.clone());
+        let _guard = init_logs(&config);
         let metrics = init_metrics(&config)?;
-        run(config, metrics)
+        run(config, metrics).map_err(|e| {
+            sentry::integrations::failure::capture_error(&e);
+            e
+        })
     } else {
         eprintln!("ERR: Missing configuration argument.");
         Ok(())
     }
+}
+
+fn init_logs(config: &Config) -> sentry::ClientInitGuard {
+    let mut log_builder = pretty_env_logger::formatted_builder();
+    log_builder.parse_filters("info");
+    let log_integration = sentry::integrations::log::LogIntegration::default()
+        .with_env_logger_dest(Some(log_builder.build()));
+    // TODO: Inline once we have stable type ascription.
+    let client_options: sentry::ClientOptions = config.sentry_host.clone().into();
+    let client_options = client_options.add_integration(log_integration);
+    sentry::init(client_options)
 }
 
 fn init_metrics(config: &Config) -> Result<statsd::Client, Error> {
@@ -111,15 +124,14 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
         if let Notification::Publish(p) = notification {
             let payload = std::str::from_utf8((*p.payload).as_slice())?;
             let tristate = zap_tristate(&p.topic_name, payload, &switch_configs);
-            eprintln!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
+            log::info!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
             if let Some(t) = tristate {
-                eprintln!("Marking ...");
                 metrics.incr("publish");
                 client.publish(target_topic, QoS::AtLeastOnce, false, t)?
             }
         }
     }
-    eprintln!("MQTT connection closed.");
+    log::warn!("MQTT connection closed.");
 
     Ok(())
 }
