@@ -90,7 +90,7 @@ fn init_metrics(config: &Config) -> Result<statsd::Client, Error> {
 }
 
 fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
-    let (target_mqtt_client, _target_notifications) = metrics.time("target_connect", || {
+    let (target_mqtt_client, mut target_notifications) = metrics.time("target_connect", || {
         let mut target_options = MqttOptions::new("target", &config.target.host, 8883);
         target_options
             .set_keep_alive(5)
@@ -98,6 +98,12 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
             .set_credentials(config.target.user.clone(), config.target.password.clone());
         log::info!("Connecting to target {}:{}", &config.target.host, 8883);
         MqttClient::new(target_options, 64)
+    });
+
+    std::thread::spawn(move || {
+        for n in target_notifications.iter() {
+            log::trace!("Processing target event: {:?}", n);
+        }
     });
 
     let (mut source_mqtt_client, mut source_notifications) = metrics.time("source_connect", || {
@@ -114,6 +120,7 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
 
     let switch_configs = prepare_switch_configs(config.switches);
     for notification in source_notifications.iter() {
+        log::trace!("Processing source event: {:?}", notification);
         match notification {
             Err(e) => log::error!("Connection error: {:?}", e),
             Ok((packet, _outgoing)) => {
