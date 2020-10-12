@@ -123,10 +123,10 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
         log::trace!("Processing source event: {:?}", notification);
         match notification {
             Err(e) => log::error!("Connection error: {:?}", e),
-            Ok((packet, _outgoing)) => {
+            Ok(rumqttc::Event::Incoming(packet)) => {
                 let mut client = target_mqtt_client.clone();
                 let target_topic = config.target_topic.to_string();
-                if let Some(Packet::Publish(p)) = packet {
+                if let Packet::Publish(p) = packet {
                     let payload = std::str::from_utf8(&p.payload)?;
                     let tristate = zap_tristate(&p.topic, payload, &switch_configs);
                     log::info!("Received {:#?}, sending tristate {:#?}.", payload, tristate);
@@ -135,6 +135,9 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
                         client.publish(target_topic, QoS::AtLeastOnce, false, t)?
                     }
                 }
+            },
+            Ok(rumqttc::Event::Outgoing(event)) => {
+                log::info!("Outgoing event: {:#?}", event);
             }
         }
     }
