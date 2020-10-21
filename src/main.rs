@@ -135,9 +135,16 @@ fn run(config: Config, metrics: statsd::Client) -> Result<(), Error> {
                         client.publish(target_topic, QoS::AtLeastOnce, false, t)?
                     }
                 }
-            },
+            }
             Ok(rumqttc::Event::Outgoing(event)) => {
-                log::info!("Outgoing event: {:#?}", event);
+                match event {
+                    rumqttc::Outgoing::PingReq => {
+                        // Ignoring this because it's spammy.
+                    }
+                    e => {
+                        log::info!("Outgoing event: {:#?}", e);
+                    }
+                }
             }
         }
     }
