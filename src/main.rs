@@ -1,4 +1,4 @@
-use failure::Error;
+use anyhow::Error;
 use rumqttc::{Client as MqttClient, MqttOptions, Packet, QoS};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -65,7 +65,7 @@ fn main() -> Result<(), Error> {
         let _guard = init_logs(&config);
         let metrics = init_metrics(&config)?;
         run(config, metrics).map_err(|e| {
-            sentry::integrations::failure::capture_error(&e);
+            sentry_anyhow::capture_anyhow(&e);
             e
         })
     } else {
@@ -77,11 +77,13 @@ fn main() -> Result<(), Error> {
 fn init_logs(config: &Config) -> sentry::ClientInitGuard {
     let mut log_builder = pretty_env_logger::formatted_builder();
     log_builder.parse_filters("info");
-    let log_integration = sentry::integrations::log::LogIntegration::default()
-        .with_env_logger_dest(Some(log_builder.build()));
+    let logger = sentry_log::SentryLogger::with_dest(log_builder.build());
+
+    log::set_boxed_logger(Box::new(logger)).expect("Setting logger failed");
+    log::set_max_level(log::LevelFilter::Info);
+
     // TODO: Inline once we have stable type ascription.
     let client_options: sentry::ClientOptions = config.sentry_host.clone().into();
-    let client_options = client_options.add_integration(log_integration);
     sentry::init(client_options)
 }
 
@@ -160,7 +162,7 @@ mod test {
     #[test]
     fn test_prepare_zap_configs() {
         let config_str = include_str!("../config/config.toml.example");
-        let config: Config = toml::from_str(&config_str).expect("Invalid sample config");
+        let config: Config = toml::from_str(config_str).expect("Invalid sample config");
 
         let actual = prepare_switch_configs(config.switches);
         let mut expected = HashMap::with_capacity(2);

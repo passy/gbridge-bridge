@@ -5,13 +5,15 @@ authors = ["Pascal Hartig <phartig@rdrei.net>"]
 edition = "2018"
 
 [dependencies]
-failure = "0.1.8"
 toml = "0.5.8"
 serde = { version = "1.0.131", features = ["derive"] }
 log = "0.4.14"
 pretty_env_logger = "0.4.0"
 statsd = "0.14.1"
-sentry = { version = "0.20.1", default-features = false, features = ["log", "env_logger", "failure", "reqwest"] }
+sentry = { version = "0.23.0", features = ["log"] }
 ring = "0.16.20"
 rumqttc = "0.1.1"
 reqwest = { version = "0.11.7", default-features = false, features = ["rustls-tls"] }
+sentry-log = "0.23.0"
+anyhow = "1.0.51"
+sentry-anyhow = "0.23.0"
